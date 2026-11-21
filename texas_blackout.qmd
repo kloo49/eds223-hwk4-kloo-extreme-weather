@@ -1,0 +1,39 @@
+---
+title: "EDS 223 Homework Assignment 4"
+subtitle: "Identifying the impacts of extreme weather"
+author: "Kelly Loo"
+date: 2026-11-22
+execute: 
+  eval: true
+format:
+  pdf:
+    toc: false
+    mainfont: Times New Roman
+options: 
+  chunk_output_type: console
+---
+
+## Read in data
+
+```{r}
+#| output: False
+library(sf)          # vector handling
+library(terra)       # raster handling
+library(tidyverse)
+library(tmap)        # map making
+```
+
+```{r}
+filelist <- list.files(here::here("data", "VNP46A1"), full.names = TRUE)
+h08v05_feb7 <- rast(filelist[1])
+h08v06_feb7 <- rast(filelist[2])
+h08v05_feb16 <- rast(filelist[3])
+h08v06_feb16 <- rast(filelist[4])
+
+roads <- st_read('data/gis_osm_roads_free_1.gpkg')
+houses <- st_read('data/gis_osm_buildings_a_free_1.gpkg')
+```
+
+## Find locations that experienced a blackout
+
+## Identify homes that experienced blackouts by combining the locations of homes and blackouts
