@@ -13,16 +13,9 @@ options:
   chunk_output_type: console
 ---
 
-## Background
-Texas suffered three severe winter storms in 2021 on February 10-11, 13-17, and 15-20.
-
-In this assignment, we evaluate impacts of the winter storms by estimating the number of homes and areas in the Houston metropolitan area that lost power. We use remotely-sensed night lights data from the Visible Infrared Imaging Radiometer Suite (VIIRS) on the Suomi satellite. We use building and roads data from OpenStreetMap.
-
-We have two datasets from VIIRS, one before the storm (Feb 7) and one after (Feb 16).
-
 ## Read in data
 
-```{r}
+```{r load-library}
 #| output: False
 library(sf)          # vector handling
 library(terra)       # raster handling
@@ -31,28 +24,28 @@ library(tmap)        # map making
 library(raster)
 ```
 
-```{r}
-filelist <- list.files(here::here("data", "VNP46A1"), full.names = TRUE)
+```{r load-data}
+filelist <- list.files(here::here("data", "VNP46A1"), full.names = TRUE) # all TIF files
 h08v05_feb7 <- rast(filelist[1])
 h08v06_feb7 <- rast(filelist[2])
 h08v05_feb16 <- rast(filelist[3])
 h08v06_feb16 <- rast(filelist[4])
 
 roads <- read_sf('data/gis_osm_roads_free_1.gpkg')
-houses <- read_sf('data/gis_osm_buildings_a_free_1.gpkg')
+buildings <- read_sf('data/gis_osm_buildings_a_free_1.gpkg')
 ```
 
 ## Find locations that experienced a blackout
 
 ### Merge tiles for 2021-02-07 and 2021-02-16
 
-```{r}
+```{r check-viirs-crs}
 # Check CRS match
 same.crs(h08v05_feb7,h08v06_feb7)
 same.crs(h08v05_feb16,h08v06_feb16)
 ```
 
-```{r}
+```{r merge-viirs}
 viirs_feb7 <- merge(h08v05_feb7,h08v06_feb7)
 viirs_feb16 <- merge(h08v05_feb16,h08v06_feb16)
 ```
@@ -61,14 +54,14 @@ viirs_feb16 <- merge(h08v05_feb16,h08v06_feb16)
 
 Find change in night light intensity
 
-```{r}
+```{r dlight-intensity}
 dlights <- viirs_feb7 - viirs_feb16
 ```
 
 Reclassify the difference raster.\
 Assign `NA` to locations with a drop of less than 200 change
 
-```{r}
+```{r reclassify}
 # Reclassify matrix
 rcl <- matrix(c(
     -Inf, -200, 1,
@@ -82,7 +75,7 @@ blackout_zones <- as.factor(classify(dlights, rcl = rcl))
 
 Vectorize the blackout mask.
 
-```{r}
+```{r vectorize}
 blackout_mask <- as.polygons(blackout_zones) |> 
     st_as_sf() |> 
     rename(zone = 1)
@@ -90,7 +83,7 @@ blackout_mask <- as.polygons(blackout_zones) |>
 
 Crop the blackout mask to houston area
 
-```{r}
+```{r crop}
 # Create bounding box for Houston
 houston_bbox <- st_bbox(c(xmin = -96.5, xmax = -94.5, ymin = 29, ymax = 30.5),
                         crs = st_crs(blackout_mask)) |> 
@@ -101,11 +94,20 @@ blackout_houston <- st_crop(blackout_mask, houston_bbox)
 
 Reproject the blackout data to EPSG:3083
 
-```{r}
+```{r reproject}
 blackout_houston <- st_transform(blackout_houston, 3083)
 
 # Check CRS
 crs(blackout_houston)
+```
+
+```{r plot-init-mask}
+tm_basemap(server = "Esri.WorldTopoMap") + 
+tm_shape(blackout_houston) +
+    tm_polygons() +
+    tm_title(text='Inital blackout mask for Houston') +
+    tm_compass(position = c("bottom","left")) +
+    tm_scalebar()
 ```
 
 ### Exclude highways from the cropped blackout mask
@@ -114,33 +116,50 @@ Highway changes in night light intensities are less likely to be related to the 
 
 Identify areas within 200m of all highways.
 
-```{r}
+```{r 200m-highway}
 roads <- st_transform(roads, 3083)
 
-blackout_highways <- st_join(blackout_houston, roads, 
-                             st_is_within_distance, 
-                             dist = units::set_units(200,'m'))
+roads_buffer <- st_buffer(roads, units::set_units(200,'m')) |> 
+    st_union()
 ```
 
 Find areas that experienced blackouts further than 200m from a highway
 
-```{r}
+```{r blackout-no-highway}
 # crop out the highways and the 200m within
-blackout_mask_cropped <- st_crop(blackout_houston, blackout_highways, inverse = TRUE)
+blackout_highways <- st_difference(blackout_houston, roads_buffer)
+```
+
+```{r plot-mask-no-freeway}
+tm_basemap(server = "Esri.WorldTopoMap") + 
+tm_shape(blackout_highways) +
+    tm_polygons() +
+    tm_title(text='Blackout mask with 200m buffer for Houston') +
+    tm_compass(position = c("bottom","left")) +
+    tm_scalebar()
 ```
 
 ### Identify the number of homes likely impacted by blackouts
 
-```{r}
-houses <- st_transform(houses, 3083)
+```{r houses-blackout}
+buildings <- st_transform(buildings, 3083)
 
-blackout_homes <- st_crop(houses, blackout_mask_cropped)
+houses <- buildings |> 
+    filter(type %in% c('residential','apartments','house','static_caravan','detached'))
+
+blackout_homes <- st_filter(houses, blackout_highways)
 ```
 
 Visualize the homes
 
-```{r}
+```{r blackout-home-map}
+n_blackout_homes = nrow(blackout_homes)
+
 tm_basemap(server = "Esri.WorldTopoMap") + 
 tm_shape(blackout_homes) +
-    tm_polygons()
+    tm_polygons() +
+    tm_title(text = paste('Homes in Houston that lost power:',n_blackout_homes)) +
+tm_compass(position = c("bottom","left")) +
+tm_scalebar() +
+tm_layout(component.autoscale = FALSE)
 ```
