@@ -1,5 +1,5 @@
-# eds223-hwk4-kloo-extreme-weather
-Homework Assignment 4 Identifying the impacts of extreme weather
+# Identifying the impacts of extreme weather
+EDS 223 Homework Assignment 4 
 
 [Assignment Link](https://eds-223-geospatial.github.io/assignments/HW4.html)
 
