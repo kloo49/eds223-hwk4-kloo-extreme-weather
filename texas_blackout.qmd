@@ -127,7 +127,8 @@ Find areas that experienced blackouts further than 200m from a highway
 
 ```{r blackout-no-highway}
 # crop out the highways and the 200m within
-blackout_highways <- st_difference(blackout_houston, roads_buffer)
+blackout_highways <- st_difference(blackout_houston, roads_buffer) |> 
+    st_make_valid()
 ```
 
 ```{r plot-mask-no-freeway}
@@ -144,10 +145,12 @@ tm_shape(blackout_highways) +
 ```{r houses-blackout}
 buildings <- st_transform(buildings, 3083)
 
-houses <- buildings |> 
-    filter(type %in% c('residential','apartments','house','static_caravan','detached'))
+houses <- buildings |>
+    filter((is.na(type) & is.na(name)) |
+           type %in% c("residential", "apartments", "house",
+                       "static_caravan", "detached"))
 
-blackout_homes <- st_filter(houses, blackout_highways)
+blackout_homes <- st_join(houses, blackout_highways, left= FALSE)
 ```
 
 Visualize the homes
@@ -163,3 +166,5 @@ tm_compass(position = c("bottom","left")) +
 tm_scalebar() +
 tm_layout(component.autoscale = FALSE)
 ```
+
+The inital blackout area was huge, but once we removed the areas that are 200m from a highway, the blackout mask has decreased significantly. There are some homes that overlap this data, however, the limitation is that most the of buildings in the data are unlabeled.
